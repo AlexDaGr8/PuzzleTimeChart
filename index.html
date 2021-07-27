@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Puzzle Times</title>
+    <style>
+        .container {
+            width: 90vw;
+            margin: 10px auto;
+        }
+        canvas {
+            background: #ddd;
+        }
+    </style>
+</head>
+<body>
+    <input type="file" id="fileInput">
+    <div class="container">
+        <div id="chart"></div>
+        <div id="chart2"></div>
+    </div>
+    <script src="https://d3js.org/d3.v6.min.js"></script>
+    <script src="https://d3js.org/d3-collection.v1.min.js"></script>
+    <!-- <script src="svg.js" type="module" ></script> -->
+    <script type="module">
+        import Chart from './svg.js';
+        let fileInput = document.getElementById('fileInput');
+        fileInput.onchange = function(e) {
+            readFile(this);
+        }
+
+        let chart2 = new Chart('#chart2');
+        
+        function readFile(input) {
+            if (input.files && input.files[0]) {
+                var reader = new FileReader();
+                reader.onload = function (e) {
+                    let json = JSON.parse(e.target.result);
+                    chart2.data = convertJson(json)
+                }
+
+                reader.readAsText(input.files[0]);
+            }
+        }
+
+        function convertJson(json) {
+            let newData = {};
+            json.properties.sessionData = JSON.parse(json.properties.sessionData)
+            for (let j in json) {
+                let session = j.match(/\d+/g)
+                if (j.includes('session')) {
+                    let srcType = json.properties.sessionData[+session].opt.scrType;
+                    newData[j] = {
+                        type: srcType === undefined ? '333' : srcType,
+                        times: json[j]
+                    };
+                }
+            }
+
+            return newData;
+        }
+
+    </script>
+    <!-- <script type="module" src="index.js"></script> -->
+</body>
+</html>
