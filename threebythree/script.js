@@ -2,7 +2,7 @@ fetch("./cstimer.json")
 .then(response => {
    return response.json();
 })
-.then(data => render(formatData(data)));
+.then(data => renderScatter(formatData(data)));
 
 function formatData(data) {
     console.log('data', data);
@@ -103,8 +103,41 @@ function convertToMinSec(time) {
         }
     }
 }
-
-function render(data) {
+function Chart(svg, data, xFunc, yFunc, render) {
+    this.data = data;
+    this.g = svg.append('g')
+        .attr('transform', `translate(0,0)`)
+        .attr('class', 'time-chart'),
+    this.height = height / 2 - margin.top,
+    this.width = width,
+    this.x = xFunc === null ? null : d3.scaleTime()
+        .domain(d3.extent(this.data, xFunc))
+        .range([0, this.width]),
+    this.y = yFunc === null ? null : d3.scaleTime()
+        .domain([d3.min(this.data, yFunc) - 3000, d3.max(this.data, yFunc)])
+        .range([this.height, 0]),
+    this.axis = (third = undefined) => {
+        this.g.append('g')
+            .attr('transform', `translate(0,${this.height})`)
+            .call(d3.axisBottom(this.x));
+        this.g.append('g')
+            .attr('transform', `translate(${this.width},0)`)
+            .call(d3.axisLeft(this.y).ticks(6).tickSize(this.width))
+            .call(g => {
+                g.select('path').remove();
+                g.selectAll('.tick').select('line').attr('stroke-width', 0.3)
+            });
+        if (third) {
+            this.g.append('g')
+                .attr('transform', `translate(${this.width},0)`)
+                .call(d3.axisRight(third).ticks(6))
+        }
+        return this;
+    }
+    this.render = render
+    return this;
+};
+function renderDotAndPercentage(data) {
     data.times.sort((a,b) => a.date - b.date);
     console.log(data)
     let filterData = data.times.filter(d => d.date.getFullYear() > 2019);
@@ -118,40 +151,7 @@ function render(data) {
         .append('g')
         .attr('transform', `translate(${margin.left}, ${margin.top})`)
         
-    function Chart(svg, data, xFunc, yFunc, render) {
-        this.data = data;
-        this.g = svg.append('g')
-            .attr('transform', `translate(0,0)`)
-            .attr('class', 'time-chart'),
-        this.height = height / 2 - margin.top,
-        this.width = width,
-        this.x = xFunc === null ? null : d3.scaleTime()
-            .domain(d3.extent(this.data, xFunc))
-            .range([0, this.width]),
-        this.y = yFunc === null ? null : d3.scaleTime()
-            .domain([d3.min(this.data, yFunc) - 3000, d3.max(this.data, yFunc)])
-            .range([this.height, 0]),
-        this.axis = (third = undefined) => {
-            this.g.append('g')
-                .attr('transform', `translate(0,${this.height})`)
-                .call(d3.axisBottom(this.x));
-            this.g.append('g')
-                .attr('transform', `translate(${this.width},0)`)
-                .call(d3.axisLeft(this.y).ticks(6).tickSize(this.width))
-                .call(g => {
-                    g.select('path').remove();
-                    g.selectAll('.tick').select('line').attr('stroke-width', 0.3)
-                });
-            if (third) {
-                this.g.append('g')
-                    .attr('transform', `translate(${this.width},0)`)
-                    .call(d3.axisRight(third).ticks(6))
-            }
-            return this;
-        }
-        this.render = render
-        return this;
-    };
+    
 
     let tc = new Chart(svg, data.times, d => d.date, d => d.time.value, () => {
         
@@ -256,4 +256,90 @@ function render(data) {
         .curve(d3.curveBumpX)
     weekChart.axis(weekChart.yTotal).render();
 
+}
+
+function renderScatter(data) {
+    data.times.sort((a,b) => a.date - b.date);
+    console.log(data)
+    let nest = d3.nest()
+        .key(d => Math.round(d.time.value * 0.01))
+        .entries(data.times);
+    console.log('nest', nest);
+
+    let margin = { top: 20, right: 50, bottom: 20, left: 50 };
+    let width = 900 - margin.right - margin.left;
+    let height = 500 - margin.top - margin.bottom;
+    let svg = d3.select('#chart').append('svg')
+        .attr('width', width + margin.right + margin.left)
+        .attr('height', height + margin.top + margin.bottom)
+        .append('g')
+        .attr('transform', `translate(${margin.left}, ${margin.top})`)
+    
+    let xBand = d3.scaleBand()
+        .domain(nest.map(d => d.key))
+        .range([0, width])
+        .paddingInner(0.001);
+    let yNest = d3.scaleLinear()
+        .domain([0, d3.max(nest, d => d.values.length)])
+        .range([height, 0]);
+    let x = d3.scaleTime()
+        .domain([d3.min(data.times, d => d.time.value) - 1000, d3.max(data.times, d => d.time.value)])
+        .range([0, width]);
+    let y = d3.scaleLinear()
+        .domain([7, 19])
+        .range([height, 0]);
+    svg.append('g')
+        .attr('transform', `translate(0,${height})`)
+        .call(d3.axisBottom(x));
+    svg.append('g')
+        .call(d3.axisLeft(y));
+
+        console.log(x(150 * 100))
+    let alpha = 0.4
+    let colors = [
+        `rgba(105, 48, 109, ${alpha})`,  // purple
+        `rgba(250, 200, 205, ${alpha})`,     // pink
+        `rgba(176, 254, 118, ${alpha})`,     // green
+        `rgba(120, 195, 251, ${alpha})`,     // blue
+        `rgba(241, 143, 1, ${alpha})`        // orange
+    ]
+
+    let nestGs = svg.selectAll('g.time')
+        .data(nest)
+        .join('g')
+        .attr('class', 'time')
+        .attr('transform', d => `translate(${x(+d.key * 100) + xBand.bandwidth()/2},0)`)
+    nestGs.append('rect')
+        .attr('x', 0)
+        .attr('y', (d,i) => yNest(d.values.length))
+        .attr('width', xBand.bandwidth())
+        .attr('height', d => height - yNest(d.values.length))
+        .attr('fill', d => {
+            let val = Math.floor(d.key * 0.1);
+            if (val < 15) {
+                return colors[0];
+            } else if (val < 20) {
+                return colors[1];
+            } else if (val < 25) {
+                return colors[2];
+            } else if (val < 30) {
+                return colors[3];
+            } else {
+                return colors[4];
+            }
+        })
+    // nestGs.selectAll('rect')
+    //     .data(d => d.values)
+    //     .join('rect')
+    //     .attr('x', 0)
+    //     .attr('y', (d,i) => yNest(d.length))
+    //     .attr('width', xBand.bandwidth())
+    //     .attr('height', d => height - yNest(d.length))
+
+    let circles = svg.selectAll('circle')
+        .data(data.times)
+        .join('circle')
+        .attr('cx', d => x(d.time.value))
+        .attr('cy', (d,i) => y(d.date.getHours() + d.date.getMinutes()/60))
+        .attr('r', 2);
 }
