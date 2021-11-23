@@ -1,8 +1,10 @@
-fetch("./cstimer.json")
+import Chart from './chart.js';
+
+fetch("./cstimer_20211118_124530.json")
 .then(response => {
    return response.json();
 })
-.then(data => renderScatter(formatData(data)));
+.then(data => renderDotAndPercentage(formatData(data)));
 
 function formatData(data) {
     console.log('data', data);
@@ -26,11 +28,9 @@ function formatData(data) {
         { 
             times: [], 
             date: dateExtent[0],
-            '12-14': 0,
-            '15-16': 0,
-            '17-19': 0,
-            '20-24': 0,
-            '25-29': 0,
+            'sub15': 0,
+            '16-19': 0,
+            '20-29': 0,
             '30+': 0, 
         }
     ];
@@ -43,11 +43,9 @@ function formatData(data) {
             newData.weeks.push({ 
                 times: [], 
                 date: new Date(d),
-                '12-14': 0,
-                '15-16': 0,
-                '17-19': 0,
-                '20-24': 0,
-                '25-29': 0,
+                'sub15': 0,
+                '16-19': 0,
+                '20-29': 0,
                 '30+': 0,
             });
         }
@@ -60,15 +58,11 @@ function formatData(data) {
         w.times.forEach(t => {
             let toSec = t.time.value * .001;
             if (toSec < 15) {
-                w['12-14']++
-            } else if (toSec < 17) {
-                w['15-16']++
+                w['sub15']++
             } else if (toSec < 20) {
-                w['17-19']++
-            } else if (toSec < 25) {
-                w['20-24']++
+                w['16-19']++
             } else if (toSec < 30) {
-                w['25-29']++
+                w['20-29']++
             } else if (toSec > 30) {
                 w['30+']++
             }
@@ -76,11 +70,9 @@ function formatData(data) {
         let totalTimes = w.times.reduce((a,c) => a += c.time.value, 0);
         w.avgTime = Math.round(totalTimes / w.times.length);
         w.minTime = Math.min(...w.times.map(d => d.time.value));
-        w['12-14-perc'] = (w['12-14']/w.times.length) * 100;
-        w['15-16-perc'] = (w['15-16']/w.times.length) * 100;
-        w['17-19-perc'] = (w['17-19']/w.times.length) * 100;
-        w['20-24-perc'] = (w['20-24']/w.times.length) * 100;
-        w['25-29-perc'] = (w['25-29']/w.times.length) * 100;
+        w['sub15-perc'] = (w['sub15']/w.times.length) * 100;
+        w['16-19-perc'] = (w['16-19']/w.times.length) * 100;
+        w['20-29-perc'] = (w['20-29']/w.times.length) * 100;
         w['30+-perc'] = (w['30+']/w.times.length) * 100;
     });
     return newData;
@@ -103,45 +95,11 @@ function convertToMinSec(time) {
         }
     }
 }
-function Chart(svg, data, xFunc, yFunc, render) {
-    this.data = data;
-    this.g = svg.append('g')
-        .attr('transform', `translate(0,0)`)
-        .attr('class', 'time-chart'),
-    this.height = height / 2 - margin.top,
-    this.width = width,
-    this.x = xFunc === null ? null : d3.scaleTime()
-        .domain(d3.extent(this.data, xFunc))
-        .range([0, this.width]),
-    this.y = yFunc === null ? null : d3.scaleTime()
-        .domain([d3.min(this.data, yFunc) - 3000, d3.max(this.data, yFunc)])
-        .range([this.height, 0]),
-    this.axis = (third = undefined) => {
-        this.g.append('g')
-            .attr('transform', `translate(0,${this.height})`)
-            .call(d3.axisBottom(this.x));
-        this.g.append('g')
-            .attr('transform', `translate(${this.width},0)`)
-            .call(d3.axisLeft(this.y).ticks(6).tickSize(this.width))
-            .call(g => {
-                g.select('path').remove();
-                g.selectAll('.tick').select('line').attr('stroke-width', 0.3)
-            });
-        if (third) {
-            this.g.append('g')
-                .attr('transform', `translate(${this.width},0)`)
-                .call(d3.axisRight(third).ticks(6))
-        }
-        return this;
-    }
-    this.render = render
-    return this;
-};
 function renderDotAndPercentage(data) {
     data.times.sort((a,b) => a.date - b.date);
-    console.log(data)
+    console.log('data', data)
     let filterData = data.times.filter(d => d.date.getFullYear() > 2019);
-    console.log(filterData)
+    console.log('filterData', filterData)
     let margin = { top: 20, right: 50, bottom: 20, left: 50 };
     let width = 900 - margin.right - margin.left;
     let height = 500 - margin.top - margin.bottom;
@@ -153,11 +111,11 @@ function renderDotAndPercentage(data) {
         
     
 
-    let tc = new Chart(svg, data.times, d => d.date, d => d.time.value, () => {
-        
+    let tc = new Chart(svg, data.times, height, width, margin, d => d.date, d => d.time.value);
+    tc.render = function() {
         let minTime = d3.min(tc.data, d => d.time.value);
 
-        tc.g.append('line')
+        this.g.append('line')
             .attr('x1', 0)
             .attr('y1', tc.y(minTime))
             .attr('x2', tc.width)
@@ -167,7 +125,7 @@ function renderDotAndPercentage(data) {
 
         let avgTime = tc.data.reduce((a,c) => a += c.time.value, 0) / tc.data.length;
 
-        tc.g.append('line')
+        this.g.append('line')
             .attr('x1', 0)
             .attr('y1', tc.y(avgTime))
             .attr('x2', tc.width)
@@ -176,7 +134,7 @@ function renderDotAndPercentage(data) {
             .attr('stroke-width', 1)
 
 
-        tc.g.selectAll('circle.times')
+        this.g.selectAll('circle.times')
             .data(tc.data)
             .join('circle')
             .attr('class', 'times')
@@ -186,60 +144,78 @@ function renderDotAndPercentage(data) {
             .attr('fill-opacity', 0.3)
         
         return tc;
-    });
+    }
     tc.axis().render();
     
-    let weekChart = new Chart(svg, data, null, null, 
-        () => {
-            let colors = ["#A51C30","#44ccff","#d138bf","#B0DB43","#27187E","#FB8B24"];
-            let rectGs = weekChart.g.selectAll('g.week')
-                .data(weekChart.data.weeks)
-                .join('g')
-                .attr('transform', d => `translate(${weekChart.x(d.date)},${0})`)
-                .attr('class', 'week')
-            let weekKeys = Object.keys(weekChart.data.weeks[0]).filter(d => d.includes('perc'));
-            console.log(weekChart.data.weeks)
-            console.log(weekKeys)
-            for (let keyId in weekKeys) {
-                rectGs.append('rect')
-                    .attr('x', 0)
-                    .attr('y', d => {
-                        let i = keyId;
-                        let total = 0;
-                        while (i > -1) {
-                            total += d[weekKeys[i]]
-                            i--;
-                        }
-                        return isNaN(total) ? 0 : weekChart.y(total)
-                    })
-                    .attr('width', 5)
-                    .attr('height',  d => weekChart.height - weekChart.y(d[weekKeys[keyId]]))
-                    .attr('fill', colors[keyId])
-                    .attr('stroke', 'white')
-                    .attr('stroke-width', .5)
-            }
+    let weekChart = new Chart(svg, data, height, width, margin, null, null);
+    weekChart.render = function() {
+        let colors = ["#A51C30","#44ccff","#d138bf","#B0DB43","#27187E","#FB8B24"];
+        let weekKeys = Object.keys(weekChart.data.weeks[0]).filter(d => d.includes('perc'));
+        let legendKeys = weekKeys.slice().map(d => d.replace('-perc', ''));
+        let legend = weekChart.g.append('g')
+            .attr('class', 'legend')
+            .attr('transform', d => `translate(${this.width/2},${-this.margin.top})`)
+            .selectAll('g.legend-item')
+            .data(legendKeys)
+            .join('g')
+            .attr('class', 'legend-item')
+            .attr('transform', (d,i) => `translate(${i * 70},0)`)
+        legend.append('circle')
+            .attr('cx', 0)
+            .attr('cy', 10)
+            .attr('r', 7)
+            .attr('fill', (d,i) => colors[i])
+        legend.append('text')
+            .attr('x', 10)
+            .attr('y', 15)
+            .style('font-size', '15px')
+            .text(d => d)
 
-            weekChart.g.append('path')
-                .datum(weekChart.data.weeks)
-                .attr('d', weekChart.line)
-                .attr('fill', 'none')
-                .attr('stroke', 'steelblue')
-                .attr('stroke-width', 2);
-
-            weekChart.g.selectAll('circle.totals')
-                .data(weekChart.data.weeks)
-                .join('circle')
-                .attr('class', 'totals')
-                .attr('cx', d => weekChart.x(d.date))
-                .attr('cy', d => weekChart.yTotal(d.times.length))
-                .attr('r', 3)
+        let rectGs = weekChart.g.selectAll('g.week')
+            .data(weekChart.data.weeks)
+            .join('g')
+            .attr('transform', d => `translate(${weekChart.x(d.date)},${0})`)
+            .attr('class', 'week')
+        for (let keyId in weekKeys) {
+            rectGs.append('rect')
+                .attr('x', 0)
+                .attr('y', d => {
+                    let i = keyId;
+                    let total = 0;
+                    while (i > -1) {
+                        total += d[weekKeys[i]]
+                        i--;
+                    }
+                    return isNaN(total) ? 0 : weekChart.y(total)
+                })
+                .attr('width', 5)
+                .attr('height',  d => weekChart.y(d[weekKeys[keyId]]) ? weekChart.height - weekChart.y(d[weekKeys[keyId]]) : 0)
+                .attr('fill', colors[keyId])
                 .attr('stroke', 'white')
-                .attr('stroke-width', 2)
-                .attr('fill', 'steelblue')
-        });
-    weekChart.height = height / 2;
+                .attr('stroke-width', .5)
+        }
+
+        weekChart.g.append('path')
+            .datum(weekChart.data.weeks)
+            .attr('d', weekChart.line)
+            .attr('fill', 'none')
+            .attr('stroke', 'steelblue')
+            .attr('stroke-width', 2);
+
+        weekChart.g.selectAll('circle.totals')
+            .data(weekChart.data.weeks)
+            .join('circle')
+            .attr('class', 'totals')
+            .attr('cx', d => weekChart.x(d.date))
+            .attr('cy', d => weekChart.yTotal(d.times.length))
+            .attr('r', 3)
+            .attr('stroke', 'white')
+            .attr('stroke-width', 2)
+            .attr('fill', 'steelblue')
+    }
+    weekChart.height = height / 2 - margin.top;
     weekChart.g =  svg.append('g')
-        .attr('transform', `translate(0,${height / 2})`)
+        .attr('transform', `translate(0,${height / 2 + margin.top})`)
         .attr('class', 'week-chart');
     weekChart.x = d3.scaleTime()
             .domain(d3.extent(weekChart.data.times, d => d.date))
@@ -255,7 +231,6 @@ function renderDotAndPercentage(data) {
         .y(d => weekChart.yTotal(d.times.length))
         .curve(d3.curveBumpX)
     weekChart.axis(weekChart.yTotal).render();
-
 }
 
 function renderScatter(data) {
